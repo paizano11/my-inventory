@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Parts Inventory Tracker</title>
     <!-- Tailwind CSS for styling -->
-    <script src="https://jsdelivr.net"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <!-- HTML5 QR Code library for scanning -->
-    <script src="https://unpkg.com" type="text/javascript"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 </head>
 <body class="bg-gray-100 min-h-screen font-sans p-4">
     <div class="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden p-6 space-y-6">
@@ -71,11 +71,10 @@
             <button id="btn-export" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-2 px-4 rounded-lg text-sm transition-colors text-center">📥 Backup (Export JSON)</button>
         </div>
     </div>
-     <script>
-        // State Management - structure is now: { "BARCODE123": { name: "Part Name", qty: 5 } }
+
+    <script>
         let inventory = JSON.parse(localStorage.getItem('parts_inventory_v2')) || {};
 
-        // Backward compatibility handler if old data exists
         if (Object.keys(inventory).length === 0) {
             const oldData = JSON.parse(localStorage.getItem('parts_inventory')) || {};
             for (let sku in oldData) {
@@ -86,7 +85,6 @@
             }
         }
 
-        // DOM Elements
         const partNumberInput = document.getElementById('part-number');
         const partNameInput = document.getElementById('part-name');
         const partQtyInput = document.getElementById('part-qty');
@@ -97,11 +95,9 @@
         const emptyState = document.getElementById('empty-state');
         const scanFeedback = document.getElementById('scan-feedback');
 
-        // Initialize UI
         renderInventory();
         initScanner();
 
-        // When a user types a barcode manually, pull up the name automatically if known
         partNumberInput.addEventListener('input', (e) => {
             const sku = e.target.value.trim();
             if (inventory[sku]) {
@@ -111,7 +107,6 @@
             }
         });
 
-        // Update Inventory Logic
         function updateStock(partNum, change) {
             partNum = partNum.trim();
             let partName = partNameInput.value.trim() || "Unnamed Part";
@@ -143,7 +138,6 @@
             partQtyInput.value = '1';
         }
 
-        // Quick Inline Actions from the table row buttons
         window.quickAdjust = function(partNum, amount) {
             if (!inventory[partNum]) return;
             let currentQty = inventory[partNum].qty;
@@ -154,7 +148,6 @@
             renderInventory();
         };
 
-        // Render Data UI
         function renderInventory() {
             inventoryTbody.innerHTML = '';
             const keys = Object.keys(inventory).sort();
@@ -196,7 +189,6 @@
             window.scrollTo({ top: document.getElementById('part-number').offsetTop - 20, behavior: 'smooth' });
         }
 
-        // Event Listeners
         btnRestock.addEventListener('click', () => updateStock(partNumberInput.value, 'add'));
         btnUse.addEventListener('click', () => updateStock(partNumberInput.value, 'subtract'));
 
@@ -210,7 +202,6 @@
             downloadAnchor.remove();
         });
 
-        // Camera Scanner Initialization (Optimized for Android Lens Focus)
         function initScanner() {
             const html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
                 fps: 15, 
