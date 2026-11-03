@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parts Inventory Tracker</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- HTML5 QR Code library for scanning -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+</head>
+<body class="bg-gray-100 min-h-screen font-sans p-4">
+    <div class="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden p-6 space-y-6">
+        <h1 class="text-2xl font-bold text-center text-gray-800">📦 Parts Inventory Tracker</h1>
+
+        <!-- Scanner Section -->
+        <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-700 mb-2">📷 Barcode / QR Code Scanner</h2>
+            <div id="reader" class="w-full bg-black rounded-lg overflow-hidden" style="min-height: 250px;"></div>
+            <div id="scan-feedback" class="mt-2 text-center text-sm font-medium text-emerald-600 hidden">Code Scanned Successfully!</div>
+        </div>
+
+        <!-- Manual Input Section -->
+        <div class="space-y-3">
+            <h2 class="text-lg font-semibold text-gray-700">✏️ Manual Input / Selected Item</h2>
+            <div>
+                <label class="block text-xs font-medium text-gray-500 uppercase">Part Number / SKU</label>
+                <input type="text" id="part-number" class="w-full mt-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Scan or type part number...">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 uppercase">Quantity Adjustment</label>
+                    <input type="number" id="part-qty" value="1" min="1" class="w-full mt-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+                <div class="flex items-end gap-2">
+                    <button id="btn-use" class="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 rounded-lg transition-colors">➖ Use</button>
+                    <button id="btn-restock" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-lg transition-colors">➕ Restock</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Inventory List Table -->
+        <div>
+            <h2 class="text-lg font-semibold text-gray-700 mb-2">📋 Current Stock</h2>
+            <div class="overflow-x-auto border border-gray-200 rounded-lg">
+                <table class="w-full text-sm text-left text-gray-500">
+                    <thead class="text-xs text-gray-700 uppercase bg-gray-50 border-b border-gray-200">
+                        <tr>
+                            <th class="px-4 py-3">Part Number</th>
+                            <th class="px-4 py-3 text-center">Qty</th>
+                            <th class="px-4 py-3 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventory-tbody" class="divide-y divide-gray-200 bg-white">
+                        <!-- Dynamic items go here -->
+                    </tbody>
+                </table>
+            </div>
+            <div id="empty-state" class="text-center text-gray-400 py-6 hidden">No parts in inventory yet. Scan or add one above!</div>
+        </div>
+
+        <!-- Data Management -->
+        <div class="pt-4 border-t border-gray-100 flex gap-2">
+            <button id="btn-export" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-2 px-4 rounded-lg text-sm transition-colors text-center">📥 Backup (Export JSON)</button>
+        </div>
+    </div>
+
+    <script>
+        // State Management
+        let inventory = JSON.parse(localStorage.getItem('parts_inventory')) || {};
+
+        // DOM Elements
+        const partNumberInput = document.getElementById('part-number');
+        const partQtyInput = document.getElementById('part-qty');
+        const btnUse = document.getElementById('btn-use');
+        const btnRestock = document.getElementById('btn-restock');
+        const btnExport = document.getElementById('btn-export');
+        const inventoryTbody = document.getElementById('inventory-tbody');
+        const emptyState = document.getElementById('empty-state');
+        const scanFeedback = document.getElementById('scan-feedback');
+
+        // Initialize UI
+        renderInventory();
+        initScanner();
+
+        // Update Inventory Logic
+        function updateStock(partNum, change) {
+            partNum = partNum.trim();
+            if (!partNum) return alert('Please scan or enter a part number.');
+            
+            let currentQty = inventory[partNum] || 0;
+            let targetQty = parseInt(partQtyInput.value) || 1;
+            
+            if (change === 'subtract') {
+                if (currentQty === 0) {
+                    alert('Cannot subtract. This part is already at 0.');
+                    return;
+                }
+                inventory[partNum] = Math.max(0, currentQty - targetQty);
+            } else if (change === 'add') {
+                inventory[partNum] = currentQty + targetQty;
+            }
+
+            localStorage.setItem('parts_inventory', JSON.stringify(inventory));
+            renderInventory();
+            partNumberInput.value = partNum; 
+        }
+
+        // Quick Inline Actions from the table
+        window.quickAdjust = function(partNum, amount) {
+            let currentQty = inventory[partNum] || 0;
+            if (currentQty + amount < 0) return alert('Stock cannot go below 0.');
+            inventory[partNum] = currentQty + amount;
+            localStorage.setItem('parts_inventory', JSON.stringify(inventory));
+            renderInventory();
+        };
+
+        // Render Data UI
+        function renderInventory() {
+            inventoryTbody.innerHTML = '';
+            const keys = Object.keys(inventory).sort();
+            
+            if (keys.length === 0) {
+                emptyState.classList.remove('hidden');
+                return;
+            }
+            emptyState.classList.add('hidden');
+
+            keys.forEach(partNum => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-gray-50 transition-colors';
+                tr.innerHTML = `
+                    <td class="px-4 py-3 font-mono font-medium text-gray-900 cursor-pointer" onclick="selectPart('${partNum}')">${partNum}</td>
+                    <td class="px-4 py-3 text-center font-bold text-gray-800">${inventory[partNum]}</td>
+                    <td class="px-4 py-3 text-right space-x-1">
+                        <button onclick="quickAdjust('${partNum}', -1)" class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-2 py-1 rounded text-xs">-1</button>
+                        <button onclick="quickAdjust('${partNum}', 1)" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold px-2 py-1 rounded text-xs">+1</button>
+                    </td>
+                `;
+                inventoryTbody.appendChild(tr);
+            });
+        }
+
+        window.selectPart = function(partNum) {
+            partNumberInput.value = partNum;
+        };
+
+        // Event Listeners
+        btnRestock.addEventListener('click', () => updateStock(partNumberInput.value, 'add'));
+        btnUse.addEventListener('click', () => updateStock(partNumberInput.value, 'subtract'));
+
+        btnExport.addEventListener('click', () => {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(inventory, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `inventory_backup_${new Date().toISOString().split('T')[0]}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        });
+
+        // Camera Scanner Initialization
+        function initScanner() {
+            const html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
+                fps: 10, 
+                qrbox: { width: 250, height: 150 },
+                rememberLastUsedCamera: true,
+                supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
+            });
+            
+            function onScanSuccess(decodedText, decodedResult) {
+                partNumberInput.value = decodedText;
+                scanFeedback.classList.remove('hidden');
+                setTimeout(() => scanFeedback.classList.add('hidden'), 2000);
+            }
+
+            function onScanFailure(error) {
+                // Failures happen constantly while scanning frames. Left empty intentionally.
+            }
+
+            html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+        }
+    </script>
+</body>
+</html>
