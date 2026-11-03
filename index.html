@@ -160,22 +160,42 @@
         });
 
         // Camera Scanner Initialization
-        function initScanner() {
+         function initScanner() {
             const html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
-                fps: 10, 
-                qrbox: { width: 250, height: 150 },
+                fps: 15, // Faster frame checking
+                qrbox: function(viewfinderWidth, viewfinderHeight) {
+                    // Optimized tracking window for long linear barcodes
+                    return { width: Math.floor(viewfinderWidth * 0.8), height: 120 };
+                },
                 rememberLastUsedCamera: true,
-                supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
+                supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
+                videoConstraints: {
+                    facingMode: { exact: "environment" }, // Forces the main back camera
+                    focusMode: "continuous",             // Commands Android to autofocus
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                }
             });
             
             function onScanSuccess(decodedText, decodedResult) {
                 partNumberInput.value = decodedText;
                 scanFeedback.classList.remove('hidden');
+                
+                // Play a subtle native beep sound if supported
+                try {
+                    let ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    let osc = ctx.createOscillator();
+                    osc.connect(ctx.destination);
+                    osc.frequency.setValueAtTime(880, ctx.currentTime); // Beep tone
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.1);
+                } catch(e){}
+
                 setTimeout(() => scanFeedback.classList.add('hidden'), 2000);
             }
 
             function onScanFailure(error) {
-                // Failures happen constantly while scanning frames. Left empty intentionally.
+                // Scanning frame failures are ignored silently
             }
 
             html5QrcodeScanner.render(onScanSuccess, onScanFailure);
